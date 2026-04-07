@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f0f0f">
+  <title>Gym Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ==================== Main Views ==================== -->
+  <div class="views-container">
+
+    <!-- Workouts Tab -->
+    <div id="workouts-view" class="view active">
+      <div class="view-header">
+        <h1>Workouts</h1>
+        <button class="btn-add" onclick="openAddWorkout()">+</button>
+      </div>
+      <div id="workout-list" class="workout-list"></div>
+    </div>
+
+    <!-- Progress Tab -->
+    <div id="progress-view" class="view">
+      <div class="view-header">
+        <h1>Progress</h1>
+      </div>
+      <div class="progress-controls">
+        <select id="progress-exercise" onchange="loadProgressData(this.value)">
+          <option value="">Select Exercise</option>
+        </select>
+        <select id="progress-metric" onchange="loadProgressData(document.getElementById('progress-exercise').value)">
+          <option value="maxWeight">Max Weight</option>
+          <option value="totalVolume">Total Volume</option>
+          <option value="maxReps">Max Reps</option>
+        </select>
+      </div>
+      <div id="progress-content" class="progress-content"></div>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-view="workouts" onclick="showView('workouts')">
+      <span class="tab-icon">🏋️</span>
+      Workouts
+    </button>
+    <button class="tab-btn" data-view="progress" onclick="showView('progress')">
+      <span class="tab-icon">📊</span>
+      Progress
+    </button>
+  </nav>
+
+  <!-- ==================== Workout Detail Modal ==================== -->
+  <div id="detail-modal" class="modal">
+    <div class="modal-header">
+      <button class="btn-close" onclick="closeDetail()">← Back</button>
+      <h2>Workout</h2>
+      <div style="width: 60px"></div>
+    </div>
+    <div id="detail-content" class="detail-content"></div>
+  </div>
+
+  <!-- ==================== Add/Edit Workout Modal ==================== -->
+  <div id="form-modal" class="modal">
+    <div class="modal-header">
+      <button class="btn-close" onclick="closeForm()">Cancel</button>
+      <h2 id="form-title">New Workout</h2>
+      <button class="btn-save" onclick="saveWorkoutForm()">Save</button>
+    </div>
+    <div class="form-content">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="workout-date">
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" id="workout-notes" placeholder="e.g. Push day, felt strong">
+      </div>
+
+      <div id="exercises-container"></div>
+
+      <button class="btn-add-exercise" onclick="addExerciseEntry()">+ Add Exercise</button>
+    </div>
+  </div>
+
+  <!-- ==================== Exercise Picker Modal ==================== -->
+  <div id="picker-modal" class="modal">
+    <div class="modal-header">
+      <button class="btn-close" onclick="closePicker()">← Back</button>
+      <h2>Choose Exercise</h2>
+      <div style="width: 60px"></div>
+    </div>
+    <div class="picker-search">
+      <input type="text" id="picker-search" placeholder="Search exercises..." oninput="filterExercises(this.value)">
+    </div>
+    <div id="picker-list" class="picker-list"></div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="exercises.js"></script>
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
