@@ -1,12 +1,12 @@
 // Service Worker for offline support
 const CACHE_NAME = 'gymtracker-v1';
 const ASSETS = [
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/db.js',
-  '/exercises.js',
-  '/manifest.json'
+  './index.html',
+  './styles.css',
+  './app.js',
+  './db.js',
+  './exercises.js',
+  './manifest.json'
 ];
 
 // Cache all assets on install
