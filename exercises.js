@@ -36,7 +36,7 @@ const COMMON_EXERCISES = {
   ],
   'Back': [
     'Deadlift', 'Barbell Row', 'Pull-Up', 'Lat Pulldown',
-    'Seated Cable Row', 'T-Bar Row', 'Dumbbell Row', 'Back Hypertension',
+    'Seated Cable Row', 'T-Bar Row', 'Dumbbell Row', 'Back Hyperextension',
     'Chin-Up', 'Single Hand Cable Row'
   ],
   'Shoulders': [
