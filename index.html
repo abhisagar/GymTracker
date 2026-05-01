@@ -19,7 +19,10 @@
     <div id="workouts-view" class="view active">
       <div class="view-header">
         <h1>Workouts</h1>
-        <button class="btn-add" onclick="openAddWorkout()">+</button>
+        <div class="view-header-actions">
+          <button class="btn-header" onclick="openBackupMenu()" aria-label="Backup">⋯</button>
+          <button class="btn-add" onclick="openAddWorkout()">+</button>
+        </div>
       </div>
       <div id="workout-list" class="workout-list"></div>
     </div>
@@ -73,9 +76,16 @@
       <button class="btn-save" onclick="saveWorkoutForm()">Save</button>
     </div>
     <div class="form-content">
+      <div id="copy-from-row" style="display:none">
+        <button class="btn btn-secondary btn-full" onclick="openCopyFromPicker()">📋 Copy from previous workout</button>
+      </div>
       <div class="form-group">
         <label>Date</label>
         <input type="date" id="workout-date">
+      </div>
+      <div class="form-group">
+        <label>Bodyweight (optional, kg)</label>
+        <input type="number" id="workout-bodyweight" placeholder="e.g. 72.5" min="0" step="0.1" inputmode="decimal">
       </div>
       <div class="form-group">
         <label>Notes (optional)</label>
@@ -88,6 +98,33 @@
     </div>
   </div>
 
+  <!-- ==================== Copy From Workout Modal ==================== -->
+  <div id="copy-modal" class="modal">
+    <div class="modal-header">
+      <button class="btn-close" onclick="closeCopyFromPicker()">← Back</button>
+      <h2>Copy Previous Workout</h2>
+      <div style="width: 60px"></div>
+    </div>
+    <div id="copy-list" class="copy-list"></div>
+  </div>
+
+  <!-- ==================== Backup / Restore Modal ==================== -->
+  <div id="backup-modal" class="modal">
+    <div class="modal-header">
+      <button class="btn-close" onclick="closeBackupMenu()">← Back</button>
+      <h2>Backup & Restore</h2>
+      <div style="width: 60px"></div>
+    </div>
+    <div class="backup-content">
+      <p class="backup-hint">Your workouts are stored only on this device. Export regularly to avoid losing data.</p>
+      <button class="btn btn-primary btn-full" onclick="exportAllData()">📤 Export All Data</button>
+      <div class="backup-section-label">Restore from backup file</div>
+      <button class="btn btn-secondary btn-full" onclick="triggerImport('merge')">Merge (keep existing + add new)</button>
+      <button class="btn btn-danger btn-full" onclick="triggerImport('replace')">Replace (overwrite everything)</button>
+      <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="handleImportFile(event)">
+    </div>
+  </div>
+
   <!-- ==================== Exercise Picker Modal ==================== -->
   <div id="picker-modal" class="modal">
     <div class="modal-header">
@@ -97,6 +134,7 @@
     </div>
     <div class="picker-search">
       <input type="text" id="picker-search" placeholder="Search exercises..." oninput="filterExercises(this.value)">
+      <button class="btn-add-custom" onclick="addCustomExerciseFromPicker()">+ Add Custom Exercise</button>
     </div>
     <div id="picker-list" class="picker-list"></div>
   </div>
