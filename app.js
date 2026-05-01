@@ -66,6 +66,7 @@ async function showWorkoutDetail(id) {
   const content = document.getElementById('detail-content');
   content.innerHTML = `
     <div class="detail-date">${date}</div>
+    ${workout.bodyweight != null ? `<div class="detail-bodyweight">Bodyweight: <strong>${workout.bodyweight} kg</strong></div>` : ''}
     ${workout.notes ? `<div class="detail-notes">${workout.notes}</div>` : ''}
     ${workout.exercises.map(e => `
       <div class="exercise-card">
@@ -85,6 +86,7 @@ async function showWorkoutDetail(id) {
       </div>
     `).join('')}
     <div class="detail-actions">
+      <button class="btn btn-secondary" onclick="duplicateWorkoutAsNew('${id}')">Duplicate</button>
       <button class="btn btn-secondary" onclick="startEditWorkout('${id}')">Edit</button>
       <button class="btn btn-danger" onclick="confirmDeleteWorkout('${id}')">Delete</button>
     </div>`;
@@ -94,6 +96,19 @@ async function showWorkoutDetail(id) {
 
 function closeDetail() {
   document.getElementById('detail-modal').classList.remove('active');
+}
+
+async function duplicateWorkoutAsNew(id) {
+  const source = await getWorkout(id);
+  if (!source) return;
+  closeDetail();
+  openAddWorkout();
+  const container = document.getElementById('exercises-container');
+  container.replaceChildren();
+  source.exercises.forEach(e => {
+    addExerciseEntry(e.name, e.sets.map(s => ({ reps: s.reps, weight: s.weight })));
+  });
+  if (source.notes) document.getElementById('workout-notes').value = source.notes;
 }
 
 async function confirmDeleteWorkout(id) {
@@ -110,8 +125,10 @@ function openAddWorkout() {
   editingWorkoutId = null;
   document.getElementById('form-title').textContent = 'New Workout';
   document.getElementById('workout-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('workout-bodyweight').value = '';
   document.getElementById('workout-notes').value = '';
   document.getElementById('exercises-container').innerHTML = '';
+  document.getElementById('copy-from-row').style.display = 'block';
   addExerciseEntry();
   document.getElementById('form-modal').classList.add('active');
 }
@@ -124,7 +141,9 @@ async function startEditWorkout(id) {
   editingWorkoutId = id;
   document.getElementById('form-title').textContent = 'Edit Workout';
   document.getElementById('workout-date').value = workout.date;
+  document.getElementById('workout-bodyweight').value = workout.bodyweight ?? '';
   document.getElementById('workout-notes').value = workout.notes || '';
+  document.getElementById('copy-from-row').style.display = 'none';
 
   const container = document.getElementById('exercises-container');
   container.innerHTML = '';
@@ -152,9 +171,10 @@ function addExerciseEntry(name = '', sets = [{ reps: 10, weight: 0 }]) {
       <button class="btn-icon remove-exercise" onclick="this.closest('.exercise-entry').remove(); renumberExercises()">✕</button>
     </div>
     <div class="exercise-name-row">
-      <input type="text" class="exercise-name-input" placeholder="Exercise name" value="${name}">
+      <input type="text" class="exercise-name-input" placeholder="Exercise name" value="${escapeHtml(name)}">
       <button class="btn-icon" onclick="openExercisePicker(this)">📋</button>
     </div>
+    <div class="last-time-hint" style="display:none"></div>
     <div class="sets-container">
       ${sets.map((s, i) => createSetRow(i + 1, s.reps, s.weight)).join('')}
     </div>
@@ -164,6 +184,15 @@ function addExerciseEntry(name = '', sets = [{ reps: 10, weight: 0 }]) {
     </div>`;
 
   container.appendChild(div);
+
+  const nameInput = div.querySelector('.exercise-name-input');
+  nameInput.addEventListener('change', () => annotateLastTimeHint(div));
+  nameInput.addEventListener('blur', () => annotateLastTimeHint(div));
+
+  // Populate hint immediately if we have a name already
+  if (name) {
+    annotateLastTimeHint(div);
+  }
 }
 
 function createSetRow(num, reps = 10, weight = 0) {
@@ -201,6 +230,8 @@ function renumberExercises() {
 
 async function saveWorkoutForm() {
   const date = document.getElementById('workout-date').value;
+  const bodyweightRaw = document.getElementById('workout-bodyweight').value.trim();
+  const bodyweight = bodyweightRaw === '' ? null : parseFloat(bodyweightRaw);
   const notes = document.getElementById('workout-notes').value.trim();
 
   if (!date) {
@@ -231,6 +262,7 @@ async function saveWorkoutForm() {
   const workout = {
     id: editingWorkoutId || crypto.randomUUID(),
     date,
+    bodyweight: Number.isFinite(bodyweight) ? bodyweight : null,
     notes: notes || null,
     exercises
   };
@@ -258,22 +290,72 @@ function openExercisePicker(btn) {
 
 function renderExerciseList(filter) {
   const container = document.getElementById('picker-list');
+  const lcFilter = filter.toLowerCase();
   let html = '';
+
+  const custom = getCustomExercises();
+  const customFiltered = filter
+    ? custom.filter(e => e.toLowerCase().includes(lcFilter))
+    : custom;
+
+  if (customFiltered.length > 0) {
+    html += `<div class="picker-group">My Exercises</div>`;
+    html += customFiltered.map(e =>
+      `<div class="picker-item picker-item-custom" data-name="${escapeHtml(e)}">
+        <span class="picker-item-label">${escapeHtml(e)}</span>
+        <button class="btn-icon-sm" data-action="delete-custom" aria-label="Delete">🗑</button>
+      </div>`
+    ).join('');
+  }
 
   for (const [group, exercises] of Object.entries(COMMON_EXERCISES)) {
     const filtered = filter
-      ? exercises.filter(e => e.toLowerCase().includes(filter.toLowerCase()))
+      ? exercises.filter(e => e.toLowerCase().includes(lcFilter))
       : exercises;
 
     if (filtered.length === 0) continue;
 
     html += `<div class="picker-group">${group}</div>`;
     html += filtered.map(e =>
-      `<div class="picker-item" onclick="pickExercise('${e}')">${e}</div>`
+      `<div class="picker-item" data-name="${escapeHtml(e)}">${escapeHtml(e)}</div>`
     ).join('');
   }
 
   container.innerHTML = html || '<div class="empty-state"><p>No exercises found</p></div>';
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function handlePickerClick(event) {
+  const deleteBtn = event.target.closest('[data-action="delete-custom"]');
+  if (deleteBtn) {
+    event.stopPropagation();
+    const name = deleteBtn.closest('.picker-item').dataset.name;
+    if (confirm(`Remove "${name}" from your list?`)) {
+      removeCustomExercise(name);
+      renderExerciseList(document.getElementById('picker-search').value);
+    }
+    return;
+  }
+  const item = event.target.closest('.picker-item');
+  if (item) {
+    pickExercise(item.dataset.name);
+  }
+}
+
+function addCustomExerciseFromPicker() {
+  const name = prompt('Name for new exercise:');
+  if (!name) return;
+  const added = addCustomExercise(name);
+  if (!added) {
+    alert('That exercise already exists.');
+    return;
+  }
+  const searchInput = document.getElementById('picker-search');
+  searchInput.value = '';
+  renderExerciseList('');
 }
 
 function filterExercises(value) {
@@ -283,6 +365,8 @@ function filterExercises(value) {
 function pickExercise(name) {
   if (activeExerciseInput) {
     activeExerciseInput.value = name;
+    const entry = activeExerciseInput.closest('.exercise-entry');
+    if (entry) annotateLastTimeHint(entry);
   }
   closePicker();
 }
@@ -403,8 +487,185 @@ function drawChart(entries, metric) {
     </div>`;
 }
 
+// ==================== Backup / Restore ====================
+
+function openBackupMenu() {
+  document.getElementById('backup-modal').classList.add('active');
+}
+
+function closeBackupMenu() {
+  document.getElementById('backup-modal').classList.remove('active');
+}
+
+async function exportAllData() {
+  const workouts = await getAllWorkouts();
+  const payload = {
+    app: 'gymtracker',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    customExercises: getCustomExercises(),
+    workouts
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `gymtracker-backup-${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+let pendingImportMode = 'merge';
+
+function triggerImport(mode) {
+  pendingImportMode = mode;
+  if (mode === 'replace' && !confirm('Replace will DELETE all current workouts on this device before importing. Continue?')) {
+    return;
+  }
+  document.getElementById('import-file').click();
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  let data;
+  try {
+    const text = await file.text();
+    data = JSON.parse(text);
+  } catch {
+    alert('That file is not valid JSON.');
+    return;
+  }
+
+  if (!data || !Array.isArray(data.workouts)) {
+    alert('That file does not look like a Gym Tracker backup.');
+    return;
+  }
+
+  // Basic shape validation on each workout
+  const valid = data.workouts.every(w =>
+    w && typeof w.id === 'string' && typeof w.date === 'string' && Array.isArray(w.exercises)
+  );
+  if (!valid) {
+    alert('Backup file is corrupted or has unexpected format.');
+    return;
+  }
+
+  try {
+    if (pendingImportMode === 'replace') {
+      await replaceAllWorkouts(data.workouts);
+      if (Array.isArray(data.customExercises)) {
+        localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(data.customExercises));
+      }
+      alert(`Imported ${data.workouts.length} workouts (replaced existing data).`);
+    } else {
+      const result = await mergeWorkouts(data.workouts);
+      if (Array.isArray(data.customExercises)) {
+        data.customExercises.forEach(addCustomExercise);
+      }
+      alert(`Imported ${result.added} new workouts. Skipped ${result.skipped} that already existed.`);
+    }
+  } catch (err) {
+    alert('Import failed: ' + (err?.message || 'unknown error'));
+    return;
+  }
+
+  closeBackupMenu();
+  loadWorkoutList();
+}
+
+// ==================== Copy From Previous Workout ====================
+
+async function openCopyFromPicker() {
+  const workouts = await getAllWorkouts();
+  const container = document.getElementById('copy-list');
+
+  if (workouts.length === 0) {
+    container.innerHTML = `<div class="empty-state"><p>No previous workouts to copy from.</p></div>`;
+  } else {
+    container.innerHTML = workouts.map(w => {
+      const date = new Date(w.date + 'T00:00:00').toLocaleDateString('en-IN', {
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+      });
+      const names = w.exercises.map(e => e.name).filter(Boolean);
+      const summary = names.slice(0, 3).join(', ')
+        + (names.length > 3 ? ` +${names.length - 3} more` : '');
+      return `
+        <div class="workout-card" onclick="copyFromWorkout('${w.id}')">
+          <div class="workout-card-header">
+            <span class="workout-date">${escapeHtml(date)}</span>
+            <span class="workout-count">${names.length} exercise${names.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="workout-summary">${escapeHtml(summary)}</div>
+        </div>`;
+    }).join('');
+  }
+
+  document.getElementById('copy-modal').classList.add('active');
+}
+
+function closeCopyFromPicker() {
+  document.getElementById('copy-modal').classList.remove('active');
+}
+
+async function copyFromWorkout(id) {
+  const workout = await getWorkout(id);
+  if (!workout) return;
+
+  // Clear current exercises and repopulate from source
+  const container = document.getElementById('exercises-container');
+  container.innerHTML = '';
+  workout.exercises.forEach(e => {
+    addExerciseEntry(e.name, e.sets.map(s => ({ reps: s.reps, weight: s.weight })));
+  });
+
+  // Annotate each exercise with a "last time" hint
+  await annotateAllLastTimeHints();
+
+  closeCopyFromPicker();
+}
+
+// ==================== "Last time" hint ====================
+
+async function annotateLastTimeHint(entryEl) {
+  const input = entryEl.querySelector('.exercise-name-input');
+  const hintEl = entryEl.querySelector('.last-time-hint');
+  const name = input.value.trim();
+  if (!hintEl) return;
+  if (!name) {
+    hintEl.textContent = '';
+    hintEl.style.display = 'none';
+    return;
+  }
+  const last = await getLastExerciseSession(name);
+  if (!last) {
+    hintEl.textContent = 'No previous data for this exercise.';
+    hintEl.style.display = 'block';
+    return;
+  }
+  const date = new Date(last.date + 'T00:00:00').toLocaleDateString('en-IN', {
+    month: 'short', day: 'numeric'
+  });
+  const setsSummary = last.sets.map(s => `${s.reps}×${s.weight}kg`).join(', ');
+  hintEl.innerHTML = `<span class="hint-label">Last time (${escapeHtml(date)}):</span> ${escapeHtml(setsSummary)}`;
+  hintEl.style.display = 'block';
+}
+
+async function annotateAllLastTimeHints() {
+  const entries = document.querySelectorAll('.exercise-entry');
+  for (const entry of entries) {
+    await annotateLastTimeHint(entry);
+  }
+}
+
 // ==================== Init ====================
 
 document.addEventListener('DOMContentLoaded', () => {
   showView('workouts');
+  document.getElementById('picker-list').addEventListener('click', handlePickerClick);
 });
