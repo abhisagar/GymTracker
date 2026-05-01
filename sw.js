@@ -1,5 +1,5 @@
 // Service Worker for offline support
-const CACHE_NAME = 'gymtracker-v1';
+const CACHE_NAME = 'gymtracker-v3';
 const ASSETS = [
   './index.html',
   './styles.css',
