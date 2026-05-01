@@ -84,6 +84,57 @@ async function getAllExerciseNames() {
   return [...names].sort();
 }
 
+// Get the most recent session for a specific exercise (case-insensitive match)
+// Returns { date, sets, bodyweight } or null if never logged.
+async function getLastExerciseSession(exerciseName) {
+  if (!exerciseName) return null;
+  const target = exerciseName.trim().toLowerCase();
+  if (!target) return null;
+  const workouts = await getAllWorkouts(); // newest first
+  for (const w of workouts) {
+    const match = w.exercises.find(e => (e.name || '').toLowerCase() === target);
+    if (match) {
+      return { date: w.date, sets: match.sets, bodyweight: w.bodyweight ?? null };
+    }
+  }
+  return null;
+}
+
+// Replace all workouts with the given list (used by Import / Replace)
+async function replaceAllWorkouts(workouts) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('workouts', 'readwrite');
+    const store = tx.objectStore('workouts');
+    const clearReq = store.clear();
+    clearReq.onsuccess = () => {
+      workouts.forEach(w => store.put(w));
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Merge a list of workouts, skipping any IDs that already exist
+async function mergeWorkouts(workouts) {
+  const existing = await getAllWorkouts();
+  const existingIds = new Set(existing.map(w => w.id));
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('workouts', 'readwrite');
+    const store = tx.objectStore('workouts');
+    let added = 0;
+    workouts.forEach(w => {
+      if (!existingIds.has(w.id)) {
+        store.put(w);
+        added++;
+      }
+    });
+    tx.oncomplete = () => resolve({ added, skipped: workouts.length - added });
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // Get progress data for a specific exercise: [{ date, maxWeight, maxReps, totalVolume }]
 async function getExerciseProgress(exerciseName) {
   const workouts = await getAllWorkouts();
