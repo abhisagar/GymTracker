@@ -42,7 +42,7 @@ const COMMON_EXERCISES = {
   'Shoulders': [
     'Overhead Press', 'Lateral Raise', 'Front Raise',
     'Face Pull', 'Arnold Press', 'Upright Row', 'Reverse Fly',
-    'Rear-Delt Fly'
+    'Rear-Delt Fly', "Shrugs"
   ],
   'Legs': [
     'Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Extension',
