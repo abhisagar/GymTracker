@@ -135,6 +135,25 @@ async function mergeWorkouts(workouts) {
   });
 }
 
+// Get bodyweight history: [{ date, bodyweight }] sorted oldest first.
+// One point per day; if a day has several workouts with a bodyweight, the
+// first one encountered wins (workouts aren't time-stamped, only dated, so
+// "first" among same-day entries is arbitrary but stable).
+// Derived from the optional bodyweight already stored on each workout — no schema change.
+async function getBodyweightHistory() {
+  const workouts = await getAllWorkouts();
+  const dayMap = {};
+  workouts.forEach(w => {
+    if (w.bodyweight == null) return;
+    const bw = parseFloat(w.bodyweight);
+    if (!Number.isFinite(bw)) return;
+    if (!(w.date in dayMap)) dayMap[w.date] = bw;
+  });
+  return Object.entries(dayMap)
+    .map(([date, bodyweight]) => ({ date, bodyweight }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
 // Get progress data for a specific exercise: [{ date, maxWeight, maxReps, totalVolume }]
 async function getExerciseProgress(exerciseName) {
   const workouts = await getAllWorkouts();
@@ -143,9 +162,9 @@ async function getExerciseProgress(exerciseName) {
   workouts.forEach(w => {
     const dayKey = w.date;
     w.exercises.forEach(e => {
-      if (e.name.toLowerCase() === exerciseName.toLowerCase()) {
+      if ((e.name || '').toLowerCase() === exerciseName.toLowerCase()) {
         if (!dayMap[dayKey]) {
-          dayMap[dayKey] = { date: dayKey, maxWeight: 0, maxReps: 0, totalVolume: 0 };
+          dayMap[dayKey] = { date: dayKey, maxWeight: 0, maxReps: 0, totalVolume: 0, totalReps: 0 };
         }
         e.sets.forEach(s => {
           const weight = parseFloat(s.weight) || 0;
@@ -153,10 +172,18 @@ async function getExerciseProgress(exerciseName) {
           dayMap[dayKey].maxWeight = Math.max(dayMap[dayKey].maxWeight, weight);
           dayMap[dayKey].maxReps = Math.max(dayMap[dayKey].maxReps, reps);
           dayMap[dayKey].totalVolume += weight * reps;
+          dayMap[dayKey].totalReps += reps;
         });
       }
     });
   });
 
-  return Object.values(dayMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+  // avgWeightPerRep = reps-weighted average weight (total volume / total reps).
+  // Derived from existing data, so nothing stored on the device changes.
+  return Object.values(dayMap)
+    .map(d => ({
+      ...d,
+      avgWeightPerRep: d.totalReps > 0 ? d.totalVolume / d.totalReps : 0
+    }))
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
