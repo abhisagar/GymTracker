@@ -377,12 +377,16 @@ function closePicker() {
 
 // ==================== Progress View ====================
 
+// Sentinel value used in the exercise dropdown to select bodyweight tracking.
+const BODYWEIGHT_KEY = '__bodyweight__';
+
 async function loadProgressView() {
   const names = await getAllExerciseNames();
   const select = document.getElementById('progress-exercise');
   const currentVal = select.value;
 
   select.innerHTML = '<option value="">Select Exercise</option>'
+    + `<option value="${BODYWEIGHT_KEY}" ${currentVal === BODYWEIGHT_KEY ? 'selected' : ''}>⚖️ Bodyweight</option>`
     + names.map(n => `<option value="${n}" ${n === currentVal ? 'selected' : ''}>${n}</option>`).join('');
 
   if (currentVal) {
@@ -398,11 +402,20 @@ async function loadProgressView() {
 }
 
 async function loadProgressData(exerciseName) {
+  const metricSelect = document.getElementById('progress-metric');
+  // Bodyweight is a single value per day, so the metric selector doesn't apply to it.
+  metricSelect.style.display = exerciseName === BODYWEIGHT_KEY ? 'none' : '';
+
   if (!exerciseName) return;
+
+  if (exerciseName === BODYWEIGHT_KEY) {
+    await loadBodyweightProgress();
+    return;
+  }
 
   const entries = await getExerciseProgress(exerciseName);
   const container = document.getElementById('progress-content');
-  const metric = document.getElementById('progress-metric').value;
+  const metric = metricSelect.value;
 
   if (entries.length === 0) {
     container.innerHTML = `
@@ -425,12 +438,60 @@ async function loadProgressData(exerciseName) {
         <span class="progress-date">${date}</span>
         <div class="progress-stats">
           <span class="progress-weight">${e.maxWeight} kg</span>
-          <span class="progress-detail">${e.maxReps} reps · Vol: ${Math.round(e.totalVolume)}</span>
+          <span class="progress-detail">Avg ${Math.round(e.avgWeightPerRep * 10) / 10} kg/rep · ${e.maxReps} reps · Vol: ${Math.round(e.totalVolume)}</span>
         </div>
       </div>`;
   }).join('');
 
   container.innerHTML = chartHtml + `<div class="progress-table">${tableHtml}</div>`;
+}
+
+async function loadBodyweightProgress() {
+  const history = await getBodyweightHistory();
+  const container = document.getElementById('progress-content');
+  container.replaceChildren();
+
+  if (history.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    const icon = document.createElement('div');
+    icon.className = 'empty-icon';
+    icon.textContent = '⚖️';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'No Bodyweight Logged';
+    const p = document.createElement('p');
+    p.textContent = 'Add a bodyweight when logging a workout to track it here';
+    empty.append(icon, h3, p);
+    container.appendChild(empty);
+    return;
+  }
+
+  // Reuse the exercise chart by exposing bodyweight under the 'bodyweight' metric key.
+  // drawChart builds its string purely from numeric data, so parsing it is safe.
+  const chartHtml = drawChart(history, 'bodyweight');
+  container.appendChild(document.createRange().createContextualFragment(chartHtml));
+
+  const table = document.createElement('div');
+  table.className = 'progress-table';
+  history.slice().reverse().forEach(e => {
+    const date = new Date(e.date + 'T00:00:00').toLocaleDateString('en-IN', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+    const row = document.createElement('div');
+    row.className = 'progress-row';
+    const dateEl = document.createElement('span');
+    dateEl.className = 'progress-date';
+    dateEl.textContent = date;
+    const stats = document.createElement('div');
+    stats.className = 'progress-stats';
+    const weight = document.createElement('span');
+    weight.className = 'progress-weight';
+    weight.textContent = `${e.bodyweight} kg`;
+    stats.appendChild(weight);
+    row.append(dateEl, stats);
+    table.appendChild(row);
+  });
+  container.appendChild(table);
 }
 
 function drawChart(entries, metric) {
@@ -439,7 +500,9 @@ function drawChart(entries, metric) {
   }
 
   const values = entries.map(e => {
+    if (metric === 'bodyweight') return e.bodyweight;
     if (metric === 'maxWeight') return e.maxWeight;
+    if (metric === 'avgWeightPerRep') return Math.round(e.avgWeightPerRep * 10) / 10;
     if (metric === 'maxReps') return e.maxReps;
     return e.totalVolume;
   });
@@ -467,7 +530,9 @@ function drawChart(entries, metric) {
   // Area fill
   const area = `${points[0].x},${chartHeight - 20} ${polyline} ${points[points.length - 1].x},${chartHeight - 20}`;
 
-  const metricLabel = metric === 'maxWeight' ? 'Max Weight (kg)'
+  const metricLabel = metric === 'bodyweight' ? 'Bodyweight (kg)'
+    : metric === 'maxWeight' ? 'Max Weight (kg)'
+    : metric === 'avgWeightPerRep' ? 'Avg Weight / Rep (kg)'
     : metric === 'maxReps' ? 'Max Reps' : 'Total Volume';
 
   return `
