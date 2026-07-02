@@ -707,7 +707,13 @@ async function annotateLastTimeHint(entryEl) {
     hintEl.style.display = 'none';
     return;
   }
-  const last = await getLastExerciseSession(name);
+  // Exclude the workout being logged so the hint shows the genuinely PREVIOUS
+  // session: skip today's date (new workout) and, when editing, the workout's id.
+  const excludeDate = document.getElementById('workout-date').value || null;
+  const last = await getLastExerciseSession(name, {
+    excludeWorkoutId: editingWorkoutId,
+    excludeDate
+  });
   if (!last) {
     hintEl.textContent = 'No previous data for this exercise.';
     hintEl.style.display = 'block';
