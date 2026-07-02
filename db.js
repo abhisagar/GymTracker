@@ -84,14 +84,21 @@ async function getAllExerciseNames() {
   return [...names].sort();
 }
 
-// Get the most recent session for a specific exercise (case-insensitive match)
+// Get the most recent session for a specific exercise (case-insensitive match).
+// Options let callers skip the workout currently being logged so the "last time"
+// hint shows the PREVIOUS session, not the one being edited:
+//   - excludeWorkoutId: skip the workout with this id (the one being edited)
+//   - excludeDate: skip every workout on this date (the day being logged)
 // Returns { date, sets, bodyweight } or null if never logged.
-async function getLastExerciseSession(exerciseName) {
+async function getLastExerciseSession(exerciseName, options = {}) {
   if (!exerciseName) return null;
   const target = exerciseName.trim().toLowerCase();
   if (!target) return null;
+  const { excludeWorkoutId = null, excludeDate = null } = options;
   const workouts = await getAllWorkouts(); // newest first
   for (const w of workouts) {
+    if (excludeWorkoutId && w.id === excludeWorkoutId) continue;
+    if (excludeDate && w.date === excludeDate) continue;
     const match = w.exercises.find(e => (e.name || '').toLowerCase() === target);
     if (match) {
       return { date: w.date, sets: match.sets, bodyweight: w.bodyweight ?? null };
